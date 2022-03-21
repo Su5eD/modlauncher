@@ -89,7 +89,7 @@ public final class ModuleLayerHandler implements IModuleLayerManager {
 
     @Override
     public Optional<ModuleLayer> getLayer(final Layer layer) {
-        return Optional.ofNullable(completedLayers.get(layer).layer());
+        return Optional.ofNullable(completedLayers.get(layer)).map(LayerInfo::layer);
     }
 
     public void updateLayer(Layer layer, Consumer<LayerInfo> action) {
