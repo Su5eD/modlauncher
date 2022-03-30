@@ -130,6 +130,10 @@ public interface ITransformationService {
     default Map.Entry<Set<String>,Supplier<Function<String, Optional<URL>>>> additionalResourcesLocator() {
         return null;
     }
+    
+    default Map<String, Set<String>> additionalPackages() {
+        return Map.of();
+    }
 
     interface OptionResult {
         <V> V value(OptionSpec<V> options);
