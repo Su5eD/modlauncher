@@ -21,11 +21,12 @@ package cpw.mods.modlauncher.test;
 import cpw.mods.cl.JarModuleFinder;
 import cpw.mods.jarhandling.SecureJar;
 import cpw.mods.modlauncher.*;
-import cpw.mods.modlauncher.api.IEnvironment;
-import cpw.mods.modlauncher.api.ITransformer;
-import cpw.mods.modlauncher.api.TypesafeMap;
+import cpw.mods.modlauncher.api.*;
 import org.jetbrains.annotations.NotNull;
 import org.junit.jupiter.api.Test;
+import org.objectweb.asm.Opcodes;
+import org.objectweb.asm.tree.ClassNode;
+import org.objectweb.asm.tree.FieldNode;
 import org.powermock.reflect.Whitebox;
 
 import java.lang.module.Configuration;
@@ -33,6 +34,7 @@ import java.lang.module.ModuleFinder;
 import java.lang.reflect.Constructor;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -43,7 +45,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
  * Test class loader
  */
 class TransformingClassLoaderTests {
-    private static final String TARGET_CLASS = "cpw.mods.modlauncher.testjar.TestClass";
+    private static final String TARGET_CLASS = "cpw.mods.modlauncher.testjar.CheesePuffs";
 
     @Test
     void testClassLoader() throws Exception {
@@ -51,7 +53,7 @@ class TransformingClassLoaderTests {
             @NotNull
             @Override
             public List<ITransformer> transformers() {
-                return Stream.of(new ClassNodeTransformer(List.of(TARGET_CLASS))).collect(Collectors.toList());
+                return Stream.of(new ClassNodeTransformer()).collect(Collectors.toList());
             }
         };
 
@@ -60,14 +62,14 @@ class TransformingClassLoaderTests {
         LaunchPluginHandler lph = new LaunchPluginHandler(layerHandler);
         TransformationServiceDecorator sd = Whitebox.invokeConstructor(TransformationServiceDecorator.class, mockTransformerService);
         sd.gatherTransformers(transformStore);
-        
-        Environment environment = Whitebox.invokeConstructor(Environment.class, new Class[]{ Launcher.class }, new Object[]{ null });
+
+        Environment environment = Whitebox.invokeConstructor(Environment.class, new Class[]{Launcher.class}, new Object[]{null});
         new TypesafeMap(IEnvironment.class);
         Configuration configuration = createTestJarsConfiguration();
         Class<?> builderClass = Class.forName("cpw.mods.modlauncher.TransformingClassLoaderBuilder");
         Constructor<TransformingClassLoader> constructor = Whitebox.getConstructor(TransformingClassLoader.class, TransformStore.class, LaunchPluginHandler.class, builderClass, Environment.class, Configuration.class, List.class);
         TransformingClassLoader tcl = constructor.newInstance(transformStore, lph, null, environment, configuration, List.of());
-        
+
         final Class<?> aClass = Class.forName(TARGET_CLASS, true, tcl);
         assertEquals(Whitebox.getField(aClass, "testfield").getType(), String.class);
         assertEquals(Whitebox.getField(aClass, "testfield").get(null), "CHEESE!");
@@ -77,8 +79,32 @@ class TransformingClassLoaderTests {
     }
     
     private Configuration createTestJarsConfiguration() {
-        SecureJar testJars = SecureJar.from(Path.of(System.getProperty("testJars.location")));
+        SecureJar testJars = Optional.ofNullable(System.getProperty("testJars.location"))
+                .map(s -> SecureJar.from(Path.of(s)))
+                .orElseThrow();
         JarModuleFinder finder = JarModuleFinder.of(testJars);
         return Configuration.empty().resolveAndBind(finder, ModuleFinder.ofSystem(), Set.of("cpw.mods.modlauncher.testjars"));
+    }
+
+    private static class ClassNodeTransformer implements ITransformer<ClassNode> {
+        @NotNull
+        @Override
+        public ClassNode transform(ClassNode input, ITransformerVotingContext context) {
+            FieldNode fn = new FieldNode(Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC, "testfield", "Ljava/lang/String;", null, "CHEESE!");
+            input.fields.add(fn);
+            return input;
+        }
+
+        @NotNull
+        @Override
+        public TransformerVoteResult castVote(ITransformerVotingContext context) {
+            return TransformerVoteResult.YES;
+        }
+
+        @NotNull
+        @Override
+        public Set<Target> targets() {
+            return Stream.of(Target.targetClass(TARGET_CLASS)).collect(Collectors.toSet());
+        }
     }
 }

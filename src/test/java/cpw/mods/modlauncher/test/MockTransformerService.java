@@ -35,7 +35,6 @@ import java.util.stream.*;
  */
 public class MockTransformerService implements ITransformationService {
     private ArgumentAcceptingOptionSpec<String> modsList;
-    private ArgumentAcceptingOptionSpec<Integer> modlists;
     private List<String> modList;
     private String state;
 
@@ -61,13 +60,15 @@ public class MockTransformerService implements ITransformationService {
     }
 
     @Override
-    public void onLoad(IEnvironment env, Set<String> otherServices) throws IncompatibleEnvironmentException {
+    public void onLoad(IEnvironment env, Set<String> otherServices) {
 
     }
 
     @Override
     public List<Resource> completeScan(IModuleLayerManager layerManager) {
-        SecureJar testjar = SecureJar.from(Path.of(System.getProperty("testJars.location")));
+        SecureJar testjar = Optional.ofNullable(System.getProperty("testJars.location"))
+                .map(s -> SecureJar.from(Path.of(s)))
+                .orElseThrow();
         return List.of(new Resource(IModuleLayerManager.Layer.GAME, List.of(testjar)));
     }
 
@@ -77,7 +78,7 @@ public class MockTransformerService implements ITransformationService {
         return Stream.of(new ClassNodeTransformer(modList)).collect(Collectors.toList());
     }
 
-    static class ClassNodeTransformer implements ITransformer<ClassNode> {
+    private static class ClassNodeTransformer implements ITransformer<ClassNode> {
         private final List<String> classNames;
 
         ClassNodeTransformer(List<String> classNames) {
