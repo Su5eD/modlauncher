@@ -23,11 +23,11 @@ import cpw.mods.cl.ModuleClassLoader;
 import cpw.mods.jarhandling.SecureJar;
 import cpw.mods.modlauncher.api.IModuleLayerManager;
 import cpw.mods.modlauncher.api.NamedPath;
+import cpw.mods.modlauncher.util.ClassLoaderFactory;
 
 import java.lang.module.Configuration;
 import java.lang.module.ModuleFinder;
 import java.util.*;
-import java.util.function.BiFunction;
 import java.util.function.Consumer;
 
 public final class ModuleLayerHandler implements IModuleLayerManager {
@@ -67,7 +67,7 @@ public final class ModuleLayerHandler implements IModuleLayerManager {
         layers.computeIfAbsent(layer, l->new ArrayList<>()).add(PathOrJar.from(namedPath));
     }
 
-    public LayerInfo buildLayer(final Layer layer, BiFunction<Configuration, List<ModuleLayer>, ModuleClassLoader> classLoaderSupplier) {
+    public LayerInfo buildLayer(final Layer layer, ClassLoaderFactory classLoaderSupplier) {
         final var finder = layers.getOrDefault(layer, List.of()).stream()
                 .map(PathOrJar::build)
                 .toArray(SecureJar[]::new);
@@ -77,14 +77,16 @@ public final class ModuleLayerHandler implements IModuleLayerManager {
             comp.accept(moduleLayer);
             moduleLayer.parents().forEach(comp);
         }).toList();
-        final var classLoader = classLoaderSupplier.apply(newConf, allParents);
+        final var previousLayer = layer.getPrevious();
+        final var parentClassLoader = previousLayer != null && completedLayers.containsKey(previousLayer) ? completedLayers.get(previousLayer).cl : null;
+        final var classLoader = classLoaderSupplier.create(newConf, parentClassLoader, allParents);
         final var modController = ModuleLayer.defineModules(newConf, Arrays.stream(layer.getParent()).map(completedLayers::get).map(LayerInfo::layer).toList(), f->classLoader);
         completedLayers.put(layer, new LayerInfo(modController.layer(), classLoader));
         classLoader.setFallbackClassLoader(completedLayers.get(Layer.BOOT).cl());
         return new LayerInfo(modController.layer(), classLoader);
     }
     public LayerInfo buildLayer(final Layer layer) {
-        return buildLayer(layer, (cf, p) -> new ModuleClassLoader("LAYER "+layer.name(), cf, p));
+        return buildLayer(layer, (cf, parentCL, parentLayers) -> new ModuleClassLoader("LAYER "+layer.name(), parentCL, cf, parentLayers));
     }
 
     @Override

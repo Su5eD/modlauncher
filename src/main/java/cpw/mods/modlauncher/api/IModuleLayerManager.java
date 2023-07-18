@@ -38,5 +38,9 @@ public interface IModuleLayerManager {
         public Layer[] getParent() {
             return parent;
         }
+
+        public Layer getPrevious() {
+            return ordinal() < 1 ? null : values()[ordinal() - 1];
+        }
     }
 }
